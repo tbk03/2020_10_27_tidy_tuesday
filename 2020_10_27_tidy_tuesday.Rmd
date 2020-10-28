@@ -1,0 +1,266 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(tidytuesdayR)
+```
+
+
+```{r, helper_functions}
+count_NA_in_df = function(df){
+  df %>% 
+    map(~ sum(is.na(.x))) %>% 
+    as_tibble()
+}
+
+
+var_summary_stats <- function(column, na.rm = TRUE) {
+  # the argument column is expected to be numeric vector, as this function was designed 
+  # to work with purrr::map (which passes dataframe columns as vectors to the function
+  # being mapped)
+  
+  # return a single row dataframe containing the summary stats for column
+  tibble(
+    n = sum(!is.na(column)),
+    min = min(column, na.rm = na.rm),
+    q1 = quantile(column, probs = 0.25, na.rm = na.rm),
+    median = median(column, na.rm = na.rm),
+    q3 = quantile(column, probs = 0.75, na.rm = na.rm),
+    max = max(column, na.rm = na.rm),
+    iqr = IQR(column, na.rm = na.rm),
+    mean = mean(column, na.rm = na.rm),
+    sd = sd(column, na.rm = na.rm)
+  )
+}
+
+df_summary_stats <- function(df){
+  
+  # get the names of the numeric variables in the dataframe
+  variable_name <- df %>%
+    select_if(is.numeric) %>% 
+    names()
+
+  # return a dataframe containing summary stats for each numeric variable in df
+  df %>%
+    select_if(is.numeric) %>% 
+    purrr::map_dfr(var_summary_stats) %>% 
+    add_column(variable_name, .before = 1)
+}
+
+`%nin%` = Negate(`%in%`)
+```
+
+
+```{r}
+
+# Argument for parsing commisioning date as a double, which throw parsing errors - 
+# col_types = cols(commissioning_date = col_double()) 
+wind_turbine <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-10-27/wind-turbine.csv')
+wind_turbine
+
+
+```
+
+## Tidy data
+
+check types - `commissioning_date` as character, all other types look ok at first glance.
+
+Errors when try to coerce `commissioning_date` to a numeric, as the column includes up to three commissioning dates (e.g. 2005/2006/2012)
+
+```{r}
+wind_turbine %>% 
+  distinct(commissioning_date)
+```
+So, separate the strings for commissioned data into upto three variables (`com_date_1`, `com_date_2`, `com_date_3`) and then coerce these from characters to numerics 
+
+```{r}
+wind_turbine <- wind_turbine %>% 
+  separate(commissioning_date, sep = "/", into = c("com_date_1", "com_date_2", "com_date_3")) %>%
+  mutate(com_date_1 = as.numeric(com_date_1),
+         com_date_2 = as.numeric(com_date_2),
+         com_date_3 = as.numeric(com_date_3), 
+         most_recent_com_date = pmax(com_date_1, com_date_2, com_date_3, na.rm = TRUE)
+         )
+
+wind_turbine
+```
+Hoping to get some interesting information about lifespans of turbines (where multiple commissioning dates where provided in the dataset), but little interesting or useful information in here.
+```{r}
+
+wind_turbine %>% 
+  # calculate lifespans where multiple commissioning dates are provided
+  mutate(lifespan_1 = com_date_2 - com_date_1,
+         lifespan_2 = com_date_3 - com_date_2) %>% 
+  select(lifespan_1, lifespan_2) %>% 
+  df_summary_stats()
+```
+
+
+`turbine_number_in_project` - looks like to variable combined into a single column (turbine number / number of turbines in project)
+
+```{r}
+wind_turbine <- wind_turbine %>% 
+  separate(turbine_number_in_project, sep = "/", into = c("turbine_number", "number_of_turbines_in_project")) %>% 
+  mutate(turbine_number = as.numeric(turbine_number),
+         number_of_turbines_in_project = as.numeric(number_of_turbines_in_project))
+wind_turbine
+
+```
+A quick check on the number of NAs in the wind turbines dataframe. Nothing too alarming. `turbine_rated_capacity_k_w` has 220 missing entries, so keep that in mind if using it in the analysis later on.
+
+```{r}
+count_NA_in_df(wind_turbine)
+```
+
+
+
+```{r}
+plot_core <- ggplot(data = wind_turbine,
+                    mapping = aes(x = most_recent_com_date)
+                    )
+
+plot_core + geom_histogram() +
+  facet_wrap(~manufacturer)
+```
+
+Proportion of turbines commissioned by year- top 5 manufacters + others
+
+```{r}
+
+wind_turbine
+
+# subset data for interest
+wind_turbine_focus <- wind_turbine %>% 
+  select(turbine_rated_capacity_k_w, manufacturer, most_recent_com_date)
+
+# identify top 5 manufacturers (by total number of wind turbines)
+manufacturers <- wind_turbine_focus %>% 
+  group_by(manufacturer) %>% 
+  summarise(num_turbines = n()) %>%
+  mutate(manu_ranking = min_rank(desc(num_turbines))) %>% 
+  arrange(desc(num_turbines))
+
+top_manu <- as_vector(manufacturers[1:5, 'manufacturer'])
+
+# group all manufacturers outside top 5 together
+wind_turbine_focus <- wind_turbine_focus %>% 
+  mutate(manufacturer = replace(manufacturer, manufacturer %nin% top_manu, "Others"))
+
+# add ranking for each manufacturer (based on total number of wind turbines)
+wind_turbine_focus <- wind_turbine_focus %>% 
+  left_join(manufacturers) %>% 
+  select(-num_turbines) %>% 
+  mutate(manu_ranking = replace(manu_ranking, manufacturer == "Others", 6))
+
+# for each year calculate the amount of capacity and number of turbines added 
+wind_turbine_focus <- wind_turbine_focus %>% 
+  group_by(most_recent_com_date) %>% 
+  mutate(annual_capacity_added = sum(turbine_rated_capacity_k_w, na.rm = TRUE),
+         annual_turbines_added = n()
+         ) %>% 
+  ungroup()
+
+wind_turbine_focus
+
+# for each year calculate the proportion of turbines supplied and capacity added 
+# by each manufacturer
+wind_turbine_focus <-  wind_turbine_focus %>% 
+  group_by(most_recent_com_date, manufacturer) %>%
+  summarise(capacity_added = sum(turbine_rated_capacity_k_w, na.rm = TRUE),
+            turbines_added = n(),
+            prop_capacity_added = capacity_added / annual_capacity_added,
+            prop_turbines_added = turbines_added / annual_turbines_added,
+            annual_capacity_added = annual_capacity_added,
+            annual_turbines_added = annual_turbines_added,
+            manu_ranking = manu_ranking
+            ) %>% 
+  distinct() %>% 
+  ungroup()
+
+# confirm proportions sum to approx. 1 for each year
+wind_turbine_focus %>% 
+  group_by(most_recent_com_date) %>% 
+  summarise(sum_prop_cap = sum(prop_capacity_added, na.rm = TRUE),
+            sum_prop_turb = sum(prop_turbines_added, na.rm = TRUE))
+
+count_NA_in_df(wind_turbine_focus)
+
+# plot turbines added over time
+p <- ggplot(data = wind_turbine_focus,
+                 mapping = aes(x = most_recent_com_date,
+                               y = annual_turbines_added)
+                 )
+
+p + geom_col()
+
+# plot capacity added over time
+p <- ggplot(data = wind_turbine_focus,
+                 mapping = aes(x = most_recent_com_date,
+                               y = annual_capacity_added)
+                 )
+
+p + geom_col()
+
+# plot capacity added over time
+p <- ggplot(data = wind_turbine_focus,
+                 mapping = aes(x = most_recent_com_date,
+                               y = annual_capacity_added)
+                 )
+
+p + geom_col()
+
+
+
+
+```
+```{r}
+# plot proprtion of annual capacity added for each manufacturer over time
+p <- ggplot(data = wind_turbine_focus,
+                 mapping = aes(x = most_recent_com_date,
+                               y = prop_capacity_added,
+                               colour = reorder(manufacturer, manu_ranking),
+                               fill = reorder(manufacturer, manu_ranking))
+                 )
+
+p + geom_col() +
+  # facet_wrap(~ reorder(manufacturer, manu_ranking), ncol = 2) +
+
+# p + geom_line() +
+#    facet_wrap(~ reorder(manufacturer, manu_ranking), ncol = 2) +
+  
+  theme_minimal()
+```
+
+
+
+```{r}
+plot_core <- ggplot(data = wind_turbine,
+                    mapping = aes(x = most_recent_com_date,
+                                  y = turbine_rated_capacity_k_w)
+                    )
+
+plot_core + geom_jitter(alpha = 0.4) + geom_smooth()
+```
+
+Could look at some average wind farm size by year. But not as straight forward as I first thought. The below is average size of wind farms where wind turbines have been commissioned in the year in question.
+
+```{r}
+
+wind_turbine %>% 
+  group_by(most_recent_com_date) %>% 
+  summarise(mean(number_of_turbines_in_project, na.rm = TRUE))
+```
+could look at capacity added per year
+
+```{r}
+wind_turbine
+
+wind_turbine %>% 
+  select()
+
+
+```
+
