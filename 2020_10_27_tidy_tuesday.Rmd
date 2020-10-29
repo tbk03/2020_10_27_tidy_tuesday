@@ -143,7 +143,8 @@ manufacturers <- wind_turbine_focus %>%
   mutate(manu_ranking = min_rank(desc(num_turbines))) %>% 
   arrange(desc(num_turbines))
 
-top_manu <- as_vector(manufacturers[1:5, 'manufacturer'])
+num_top_manu <- 4
+top_manu <- as_vector(manufacturers[1:num_top_manu, 'manufacturer'])
 
 # group all manufacturers outside top 5 together
 wind_turbine_focus <- wind_turbine_focus %>% 
@@ -216,24 +217,96 @@ p + geom_col()
 
 
 ```
-```{r}
-# plot proprtion of annual capacity added for each manufacturer over time
-p <- ggplot(data = wind_turbine_focus,
+```{r, fig.height=7}
+
+min_year <- min(wind_turbine_focus$most_recent_com_date)
+max_year <- max(wind_turbine_focus$most_recent_com_date)
+
+x_limits = c(min_year, max_year)
+
+# plot proportion of annual capacity added for each manufacturer over time
+p_market_share <- ggplot(data = wind_turbine_focus,
                  mapping = aes(x = most_recent_com_date,
                                y = prop_capacity_added,
-                               colour = reorder(manufacturer, manu_ranking),
                                fill = reorder(manufacturer, manu_ranking))
                  )
 
-p + geom_col() +
-  # facet_wrap(~ reorder(manufacturer, manu_ranking), ncol = 2) +
+p_market_share <- p_market_share + geom_col() +
+  
+  scale_x_continuous(limits = x_limits) +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_brewer(palette = "Set3") +
+  
+  labs(x = "",
+       y = "Market share",
+       fill = "Manufacturer",
+       title = "Shares of the Growing Canadian Wind Power Market by the Big Four Manufacturers",
+       subtitle = "Data source: open.canada.ca") +
+  
+  theme_minimal()
+
+
+# plot market growth
+p_market_growth <- ggplot(data = wind_turbine_focus,
+                          mapping = aes(x = most_recent_com_date,
+                                        y = annual_capacity_added)
+                 )
+p_market_growth <- p_market_growth + 
+  
+  geom_line(colour = "grey70", size = 1.5) +
+  
+  scale_x_continuous(limits = x_limits) +
+  
+  labs(x = "",
+       y = paste("Total capacity commissioned (megawatts)"),
+       caption = "Market share: the proportion of the total wind energy generation
+       capacity commissioned by a given manufacturer in a given year") +
+  
+  theme_minimal()
+
+
+  # +
+  #facet_wrap(~ reorder(manufacturer, manu_ranking), ncol = 2)
 
 # p + geom_line() +
 #    facet_wrap(~ reorder(manufacturer, manu_ranking), ncol = 2) +
-  
-  theme_minimal()
+cowplot::plot_grid(p_market_share, p_market_growth,
+                     ncol = 1, rel_heights = c(3, 2),
+                     align = 'v', axis = 'lr')
+
 ```
 
+```{r}
+
+wind_turbine_focus %>% 
+  mutate(bin = cut_width(most_recent_com_date, width = 5))
+  
+
+# plot proportion of annual capacity added for each manufacturer over time
+p_market_share_2 <- ggplot(data = wind_turbine_focus,
+                           mapping = aes(x = most_recent_com_date,
+                                         y = prop_capacity_added,
+                                         colour = reorder(manufacturer, manu_ranking)
+                                         )
+                           )
+
+
+p_market_share_2 + geom_point() +
+  
+  scale_x_continuous(limits = x_limits) +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_brewer(palette = "Set3") +
+
+  labs(x = "",
+       y = "Market share",
+       fill = "Manufacturer",
+       title = "Share of the Canadian Wind Power Market by the Big Four Manufacturers",
+       subtitle = "Data source: open.canada.ca") +
+
+  theme_minimal()
+
+
+```
 
 
 ```{r}
