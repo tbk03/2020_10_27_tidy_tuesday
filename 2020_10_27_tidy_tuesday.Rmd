@@ -260,7 +260,7 @@ p_market_growth <- p_market_growth +
   labs(x = "",
        y = paste("Total capacity commissioned (megawatts)"),
        caption = "Market share: the proportion of the total wind energy generation
-       capacity commissioned by a given manufacturer in a given year") +
+       capacity commissioned in a given year") +
   
   theme_minimal()
 
@@ -270,9 +270,11 @@ p_market_growth <- p_market_growth +
 
 # p + geom_line() +
 #    facet_wrap(~ reorder(manufacturer, manu_ranking), ncol = 2) +
-cowplot::plot_grid(p_market_share, p_market_growth,
+p_market <- cowplot::plot_grid(p_market_share, p_market_growth,
                      ncol = 1, rel_heights = c(3, 2),
                      align = 'v', axis = 'lr')
+
+p_market
 
 ```
 
