@@ -6,6 +6,7 @@ output: html_notebook
 ```{r}
 library(tidyverse)
 library(tidytuesdayR)
+library(lubridate)
 ```
 
 
@@ -276,37 +277,82 @@ p_market <- cowplot::plot_grid(p_market_share, p_market_growth,
 
 p_market
 
+ggsave(plot = p_market,filename = "Shares_of_the_Canadian_wind_power_market.png")
 ```
 
-```{r}
+```{r, fig.width = 7, fig.height=5}
 
-wind_turbine_focus %>% 
-  mutate(bin = cut_width(most_recent_com_date, width = 5))
+wind_turbine_focus
+
+market_share_binned <- wind_turbine_focus %>%
+  filter(most_recent_com_date <= 2017) %>% 
+  mutate(bin = cut_width(most_recent_com_date, width = 5)) %>% 
+  group_by(bin, manufacturer) %>% 
+  summarise(total_capacity_added = sum(capacity_added),
+            manu_ranking = manu_ranking) %>% 
+  distinct()
+
+market_share_binned
   
 
-# plot proportion of annual capacity added for each manufacturer over time
-p_market_share_2 <- ggplot(data = wind_turbine_focus,
-                           mapping = aes(x = most_recent_com_date,
-                                         y = prop_capacity_added,
+p_market_share_3 <- ggplot(data = market_share_binned,
+                           mapping = aes(x = bin,
+                                         y = total_capacity_added,
                                          colour = reorder(manufacturer, manu_ranking)
                                          )
                            )
 
 
-p_market_share_2 + geom_point() +
+p_market_share_3 <- p_market_share_3 + geom_jitter(size = 5, width = 0.25) +
   
-  scale_x_continuous(limits = x_limits) +
-  scale_y_continuous(labels = scales::percent) +
-  scale_fill_brewer(palette = "Set3") +
+  #geom_line(mapping = aes(group = reorder(manufacturer, manu_ranking))) +
+  
+  # scale_x_continuous(limits = x_limits) +
+  scale_colour_brewer(palette = "Set2") +
+  scale_x_discrete(labels = c("1993-1997", "1998-2002", "2003-2007", "2008-2012", "2013-2017")) +
 
   labs(x = "",
-       y = "Market share",
-       fill = "Manufacturer",
-       title = "Share of the Canadian Wind Power Market by the Big Four Manufacturers",
+       y = "Wind generation capacity added (Megawatts)",
+       colour = "Manufacturer",
+       title = "Commissioned Canadian wind generation capacity (1993-2017)",
        subtitle = "Data source: open.canada.ca") +
 
   theme_minimal()
 
+p_market_share_3
+
+ggsave(plot = p_market_share_3,filename = "Commissioned Canadian wind generation capacity (1993-2017) 1.png")
+```
+
+```{r}
+
+p_market_share_4 <- ggplot(data = market_share_binned,
+                           mapping = aes(x = bin,
+                                         y = total_capacity_added,
+                                         fill = reorder(manufacturer, manu_ranking)
+                                         )
+                           )
+
+
+p_market_share_4 <- p_market_share_4 + geom_col(position = position_dodge(preserve = "single")) +
+  
+  #geom_line(mapping = aes(group = reorder(manufacturer, manu_ranking))) +
+  
+  # scale_x_continuous(limits = x_limits) +
+  scale_fill_brewer(palette = "Set2") +
+  scale_x_discrete(labels = c("1993-1997", "1998-2002", "2003-2007", "2008-2012", "2013-2017", "2018 - ")) +
+
+  labs(x = "",
+       y = "Wind generation capacity added (Megawatts)",
+       fill = "Manufacturer",
+       title = "Commissioned Canadian wind generation capacity (1993-2019)",
+       subtitle = "Data source: open.canada.ca") +
+
+  theme_minimal()
+
+p_market_share_4
+
+ggsave(plot = p_market_share_4,filename = "Commissioned Canadian wind generation capacity (1993-2017) 2.png")
 
 ```
 
