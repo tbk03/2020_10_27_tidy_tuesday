@@ -280,13 +280,13 @@ p_market
 ggsave(plot = p_market,filename = "Shares_of_the_Canadian_wind_power_market.png")
 ```
 
-```{r, fig.width = 7, fig.height=5}
+```{r, fig.width = 10, fig.height=5}
 
 wind_turbine_focus
 
 market_share_binned <- wind_turbine_focus %>%
   filter(most_recent_com_date <= 2017) %>% 
-  mutate(bin = cut_width(most_recent_com_date, width = 5)) %>% 
+  mutate(bin = cut_width(most_recent_com_date, width = 1)) %>% 
   group_by(bin, manufacturer) %>% 
   summarise(total_capacity_added = sum(capacity_added),
             manu_ranking = manu_ranking) %>% 
@@ -309,7 +309,7 @@ p_market_share_3 <- p_market_share_3 + geom_jitter(size = 5, width = 0.25) +
   
   # scale_x_continuous(limits = x_limits) +
   scale_colour_brewer(palette = "Set2") +
-  scale_x_discrete(labels = c("1993-1997", "1998-2002", "2003-2007", "2008-2012", "2013-2017")) +
+  #scale_x_discrete(labels = c("1993-1997", "1998-2002", "2003-2007", "2008-2012", "2013-2017")) +
 
   labs(x = "",
        y = "Wind generation capacity added (Megawatts)",
@@ -324,7 +324,7 @@ p_market_share_3
 ggsave(plot = p_market_share_3,filename = "Commissioned Canadian wind generation capacity (1993-2017) 1.png")
 ```
 
-```{r}
+```{r, fig.width = 10}
 
 p_market_share_4 <- ggplot(data = market_share_binned,
                            mapping = aes(x = bin,
@@ -340,7 +340,7 @@ p_market_share_4 <- p_market_share_4 + geom_col(position = position_dodge(preser
   
   # scale_x_continuous(limits = x_limits) +
   scale_fill_brewer(palette = "Set2") +
-  scale_x_discrete(labels = c("1993-1997", "1998-2002", "2003-2007", "2008-2012", "2013-2017", "2018 - ")) +
+  #scale_x_discrete(labels = c("1993-1997", "1998-2002", "2003-2007", "2008-2012", "2013-2017", "2018 - ")) +
 
   labs(x = "",
        y = "Wind generation capacity added (Megawatts)",
@@ -355,6 +355,19 @@ p_market_share_4
 ggsave(plot = p_market_share_4,filename = "Commissioned Canadian wind generation capacity (1993-2017) 2.png")
 
 ```
+
+```{r, fig.width = 10}
+p_market_share_5 <- ggplot(data = market_share_binned,
+                           mapping = aes(x = bin,
+                                         fill = reorder(manufacturer, manu_ranking)
+                                         )
+                           )
+
+p_market_share_5 + geom_bar(mapping = aes(y = ..prop.., group = 1)) +
+  
+  labs(fill = "")
+```
+
 
 
 ```{r}
